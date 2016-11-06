@@ -28,6 +28,9 @@ public:
 
 	void compute(const cv::Mat& disp, std::vector<Stixel>& stixels, int stixelWidth = 7);
 
+	std::vector<int> lowerPath;
+	std::vector<int> upperPath;
+
 private:
 	float focalLengthX_;
 	float focalLengthY_;
