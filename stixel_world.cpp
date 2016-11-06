@@ -91,7 +91,7 @@ static void computeFreeSpace(const cv::Mat& disp, std::vector<int>& path, float 
 		for (int v = vhori; v < vmax; v++)
 		{
 			float minscore = FLT_MAX;
-			int minpath = 0;
+			int minv = 0;
 
 			int vvt = std::max(v - maxpixjumb, vhori);
 			int vvb = std::min(v + maxpixjumb + 1, vmax);
@@ -106,12 +106,12 @@ static void computeFreeSpace(const cv::Mat& disp, std::vector<int>& path, float 
 				if (s < minscore)
 				{
 					minscore = s;
-					minpath = vv;
+					minv = vv;
 				}
 			}
 
 			score(u, v) += minscore;
-			table(u, v) = minpath;
+			table(u, v) = minv;
 		}
 	}
 
@@ -130,6 +130,138 @@ static void computeFreeSpace(const cv::Mat& disp, std::vector<int>& path, float 
 	for (int u = umax - 1; u >= 0; u--)
 	{
 		path[u] = minv;
+		minv = table(u, minv);
+	}
+}
+
+static void heightSegmentation(const cv::Mat& disp, const std::vector<int>& lowerPath, std::vector<int>& upperPath,
+	float focalLengthX, float focalLengthY, float principalPointX, float principalPointY,
+	float baseline, float cameraHeight, float cameraTilt)
+{
+	CV_Assert(disp.type() == CV_32F);
+
+	// transpose for efficient memory access
+	cv::Mat1f dispt = disp.t();
+
+	const int umax = dispt.rows;
+	const int vmax = dispt.cols;
+
+	const float sinTilt = sinf(cameraTilt);
+	const float cosTilt = cosf(cameraTilt);
+
+	cv::Mat1f score(dispt.size());
+
+	for (int u = 0; u < umax; u++)
+	{
+		// compute and accumlate membership value
+		std::vector<float> integralMembership(vmax);
+		float integralMembershipOld = 0.f;
+
+		const int vb = lowerPath[u];
+		const float deltaZ = 5.f;
+		const float db = dispt(u, vb);
+
+		float deltaD = 0.f;
+		if (db > 0.f)
+		{
+			const float coef = (baseline / db) * (focalLengthX / focalLengthY);
+			const float Yb = coef * ((vb - principalPointY) * cosTilt + focalLengthY * sinTilt);
+			const float Zb = coef * (focalLengthY * cosTilt - (vb - principalPointY) * sinTilt);
+			const float Zb_deltaZ = Zb + deltaZ;
+			const float db_deltaD = baseline * focalLengthX / (Yb * sinTilt + Zb_deltaZ * cosTilt);
+			deltaD = db_deltaD - db;
+		}
+		
+		for (int v = 0; v < vmax; v++)
+		{
+			const float d = dispt(u, v);
+
+			float membership = 0.f;
+			if (db > 0.f && d > 0.f)
+			{
+				float deltad = (d - db) / deltaD;
+				float exponent = 1.f - deltad * deltad;
+				membership = powf(2.f, exponent) - 1.f;
+			}
+
+			integralMembership[v] = integralMembershipOld + membership;
+			integralMembershipOld = integralMembership[v];
+		}
+		
+		score(u, 0) = integralMembership[vb - 1];
+		for (int vh = 1; vh < vb; vh++)
+		{
+			float score1 = integralMembership[vh - 1];
+			float score2 = integralMembership[vb - 1] - integralMembership[vh - 1];
+			score(u, vh) = score1 - score2;
+		}
+	}
+
+	// extract the optimal free space path
+	cv::Mat1s table = cv::Mat1s::zeros(score.size());
+	const float Cs = 8;
+	const float Nz = 5;
+	const int maxpixjumb = 50;
+
+	// forward upperpath
+	for (int u = 1; u < umax; u++)
+	{
+		const int vb = lowerPath[u];
+		for (int vc = 0; vc < vb; vc++)
+		{
+			const float dc = dispt(u, vc);
+			const int vpt = std::max(vc - maxpixjumb, 0);
+			const int vpb = std::min(vc + maxpixjumb + 1, vb);
+
+			float minscore = FLT_MAX;
+			int minv = 0;
+
+			for (int vp = vpt; vp < vpb; vp++)
+			{
+				const float dp = dispt(u - 1, vp);
+
+				float Cz = 1.f;
+				if (dc > 0.f && dp > 0.f)
+				{
+					const float coefc = (baseline / dc) * (focalLengthX / focalLengthY);
+					const float Zc = coefc * (focalLengthY * cosTilt - (vc - principalPointY) * sinTilt);
+
+					const float coefp = (baseline / dp) * (focalLengthX / focalLengthY);
+					const float Zp = coefp * (focalLengthY * cosTilt - (vp - principalPointY) * sinTilt);
+
+					Cz = std::max(0.f, 1 - fabs(Zc - Zp) / Nz);
+				}
+
+				float penalty = Cs * abs(vc - vp) * Cz;
+
+				float s = score(u - 1, vp) + penalty;
+				if (s < minscore)
+				{
+					minscore = s;
+					minv = vp;
+				}
+			}
+
+			score(u, vc) += minscore;
+			table(u, vc) = minv;
+		}
+	}
+
+	// backward upperpath
+	upperPath.resize(umax);
+	float minscore = FLT_MAX;
+	int minv = 0;
+	for (int v = 0; v < vmax; v++)
+	{
+		if (score(umax - 1, v) < minscore)
+		{
+			minscore = score(umax - 1, v);
+			minv = v;
+		}
+	}
+	for (int u = umax - 1; u >= 0; u--)
+	{
+		upperPath[u] = minv;
 		minv = table(u, minv);
 	}
 }
@@ -158,6 +290,8 @@ void StixelWrold::compute(const cv::Mat& disp, std::vector<Stixel>& stixels, int
 		baseline_, cameraHeight_, cameraTilt_);
 
 	// height segmentation
+	heightSegmentation(disp, lowerPath, upperPath, focalLengthX_, focalLengthY_, principalPointX_, principalPointY_,
+		baseline_, cameraHeight_, cameraTilt_);
 
 	// extract stixels
 }
