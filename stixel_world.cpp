@@ -1,5 +1,23 @@
 #include "stixel_world.h"
 
+static void reduceDisparity(const cv::Mat& src, cv::Mat& dst, int stixelWidth)
+{
+	dst.create(cv::Size(src.cols / stixelWidth, src.rows), CV_32F);
+	std::vector<float> buf(stixelWidth);
+	for (int v = 0; v < src.rows; v++)
+	{
+		for (int us = 0, ud = 0; us < src.cols; us += stixelWidth, ud++)
+		{
+			for (int i = 0; i < 7; i++)
+				buf[i] = src.at<float>(v, us + i);
+
+			std::sort(std::begin(buf), std::end(buf));
+
+			dst.at<float>(v, ud) = buf[stixelWidth / 2];
+		}
+	}
+}
+
 static void computeFreeSpace(const cv::Mat& disp, std::vector<int>& path, float paramO, float paramR,
 	float focalLengthX, float focalLengthY, float principalPointX, float principalPointY,
 	float baseline, float cameraHeight, float cameraTilt)
@@ -7,7 +25,7 @@ static void computeFreeSpace(const cv::Mat& disp, std::vector<int>& path, float 
 	CV_Assert(disp.type() == CV_32F);
 
 	// transpose for efficient memory access
-	cv::Mat1f dispt = disp.t();
+	const cv::Mat1f dispt = disp.t();
 
 	const int umax = dispt.rows;
 	const int vmax = dispt.cols;
@@ -81,9 +99,9 @@ static void computeFreeSpace(const cv::Mat& disp, std::vector<int>& path, float 
 
 	// extract the optimal free space path
 	cv::Mat1s table = cv::Mat1s::zeros(score.size());
-	const int maxpixjumb = 50;
 	const float P1 = 50.f;
 	const float P2 = 32.f;
+	const int maxpixjumb = 50;
 
 	// forward path
 	for (int u = 1; u < umax; u++)
@@ -141,7 +159,7 @@ static void heightSegmentation(const cv::Mat& disp, const std::vector<int>& lowe
 	CV_Assert(disp.type() == CV_32F);
 
 	// transpose for efficient memory access
-	cv::Mat1f dispt = disp.t();
+	const cv::Mat1f dispt = disp.t();
 
 	const int umax = dispt.rows;
 	const int vmax = dispt.cols;
@@ -271,6 +289,7 @@ static void extractStixel(const cv::Mat& disp, const std::vector<int>& lowerPath
 {
 	CV_Assert(stixelWidth % 2 == 1);
 
+#if 0
 	for (int u = 0; u < disp.cols; u += stixelWidth)
 	{
 		Stixel stixel;
@@ -285,6 +304,23 @@ static void extractStixel(const cv::Mat& disp, const std::vector<int>& lowerPath
 
 		stixels.push_back(stixel);
 	}
+#else
+	for (int u = 0; u < disp.cols; u++)
+	{
+		Stixel stixel;
+		stixel.u = stixelWidth * u + stixelWidth / 2;
+		stixel.vT = upperPath[u];
+		stixel.vB = lowerPath[u];
+		stixel.width = stixelWidth;
+
+		int v = (stixel.vT + stixel.vB) / 2;
+		bool inside = (u >= 0 && u < disp.cols && v >= 0 && v <= disp.rows);
+		stixel.disp = inside ? disp.at<float>(v, u) : -1;
+
+		stixels.push_back(stixel);
+	}
+#endif
+
 }
 
 StixelWrold::StixelWrold(
@@ -306,14 +342,18 @@ void StixelWrold::compute(const cv::Mat& disp, std::vector<Stixel>& stixels, int
 {
 	CV_Assert(disp.type() == CV_32F);
 
+	// reduce disparity
+	cv::Mat dispr(cv::Size(disp.cols / stixelWidth, disp.rows), CV_32F);
+	reduceDisparity(disp, dispr, stixelWidth);
+	
 	// free space computation
-	computeFreeSpace(disp, lowerPath, 2.f, 1.f, focalLengthX_, focalLengthY_, principalPointX_, principalPointY_,
+	computeFreeSpace(dispr, lowerPath, 2.f, 1.f, focalLengthX_, focalLengthY_, principalPointX_, principalPointY_,
 		baseline_, cameraHeight_, cameraTilt_);
 
 	// height segmentation
-	heightSegmentation(disp, lowerPath, upperPath, focalLengthX_, focalLengthY_, principalPointX_, principalPointY_,
+	heightSegmentation(dispr, lowerPath, upperPath, focalLengthX_, focalLengthY_, principalPointX_, principalPointY_,
 		baseline_, cameraHeight_, cameraTilt_);
 
 	// extract stixels
-	extractStixel(disp, lowerPath, upperPath, stixels, stixelWidth);
+	extractStixel(dispr, lowerPath, upperPath, stixels, stixelWidth);
 }
