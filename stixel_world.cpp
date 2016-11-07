@@ -266,6 +266,27 @@ static void heightSegmentation(const cv::Mat& disp, const std::vector<int>& lowe
 	}
 }
 
+static void extractStixel(const cv::Mat& disp, const std::vector<int>& lowerPath, const std::vector<int>& upperPath,
+	std::vector<Stixel>& stixels, int stixelWidth)
+{
+	CV_Assert(stixelWidth % 2 == 1);
+
+	for (int u = 0; u < disp.cols; u += stixelWidth)
+	{
+		Stixel stixel;
+		stixel.u = u + stixelWidth / 2;
+		stixel.vT = upperPath[u + stixelWidth / 2];
+		stixel.vB = lowerPath[u + stixelWidth / 2];
+		stixel.width = stixelWidth;
+
+		int v = (stixel.vT + stixel.vB) / 2;
+		bool inside = (u >= 0 && u < disp.cols && v >= 0 && v <= disp.rows);
+		stixel.disp = inside ? disp.at<float>(v, u) : -1;
+
+		stixels.push_back(stixel);
+	}
+}
+
 StixelWrold::StixelWrold(
 	float focalLengthX,
 	float focalLengthY,
@@ -294,4 +315,5 @@ void StixelWrold::compute(const cv::Mat& disp, std::vector<Stixel>& stixels, int
 		baseline_, cameraHeight_, cameraTilt_);
 
 	// extract stixels
+	extractStixel(disp, lowerPath, upperPath, stixels, stixelWidth);
 }
