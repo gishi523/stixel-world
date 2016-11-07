@@ -8,7 +8,7 @@ static void reduceDisparity(const cv::Mat& src, cv::Mat& dst, int stixelWidth)
 	{
 		for (int us = 0, ud = 0; ud < dst.cols; us += stixelWidth, ud++)
 		{
-			for (int i = 0; i < 7; i++)
+			for (int i = 0; i < stixelWidth; i++)
 				buf[i] = src.at<float>(v, us + i);
 
 			std::sort(std::begin(buf), std::end(buf));
