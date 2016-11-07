@@ -6,7 +6,7 @@ static void reduceDisparity(const cv::Mat& src, cv::Mat& dst, int stixelWidth)
 	std::vector<float> buf(stixelWidth);
 	for (int v = 0; v < src.rows; v++)
 	{
-		for (int us = 0, ud = 0; us < src.cols; us += stixelWidth, ud++)
+		for (int us = 0, ud = 0; ud < dst.cols; us += stixelWidth, ud++)
 		{
 			for (int i = 0; i < 7; i++)
 				buf[i] = src.at<float>(v, us + i);
@@ -284,43 +284,50 @@ static void heightSegmentation(const cv::Mat& disp, const std::vector<int>& lowe
 	}
 }
 
+static float extractDisparity(const cv::Mat& disp, const cv::Rect& area, float maxDisp = 64)
+{
+	const cv::Rect imageArea(0, 0, disp.cols, disp.rows);
+	const cv::Mat roi(disp, area & imageArea);
+
+	const int histSize[] = { 1024 };
+	const float range[] = { -1, maxDisp };
+	const float* ranges[] = { range };
+
+	cv::Mat hist;
+	cv::calcHist(&roi, 1, 0, cv::Mat(), hist, 1, histSize, ranges);
+
+	double maxVal;
+	int maxIdx;
+	cv::minMaxIdx(hist, NULL, &maxVal, NULL, &maxIdx);
+
+	double ret = (range[1] - range[0]) * maxIdx / histSize[0] + range[0];
+	return static_cast<float>(ret);
+}
+
 static void extractStixel(const cv::Mat& disp, const std::vector<int>& lowerPath, const std::vector<int>& upperPath,
 	std::vector<Stixel>& stixels, int stixelWidth)
 {
 	CV_Assert(stixelWidth % 2 == 1);
 
-#if 0
-	for (int u = 0; u < disp.cols; u += stixelWidth)
+	for (int u = 0; u < (int)upperPath.size(); u++)
 	{
-		Stixel stixel;
-		stixel.u = u + stixelWidth / 2;
-		stixel.vT = upperPath[u + stixelWidth / 2];
-		stixel.vB = lowerPath[u + stixelWidth / 2];
-		stixel.width = stixelWidth;
+		const int vT = upperPath[u];
+		const int vB = lowerPath[u];
+		const int stixelHeight = vB - vT;
+		const cv::Rect stixelArea(stixelWidth * u, vT, stixelWidth, stixelHeight);
 
-		int v = (stixel.vT + stixel.vB) / 2;
-		bool inside = (u >= 0 && u < disp.cols && v >= 0 && v <= disp.rows);
-		stixel.disp = inside ? disp.at<float>(v, u) : -1;
-
-		stixels.push_back(stixel);
+		float d = extractDisparity(disp, stixelArea);
+		if (d > 0.f)
+		{
+			Stixel stixel;
+			stixel.u = stixelWidth * u + stixelWidth / 2;
+			stixel.vT = vT;
+			stixel.vB = vB;
+			stixel.width = stixelWidth;
+			stixel.disp = d;
+			stixels.push_back(stixel);
+		}
 	}
-#else
-	for (int u = 0; u < disp.cols; u++)
-	{
-		Stixel stixel;
-		stixel.u = stixelWidth * u + stixelWidth / 2;
-		stixel.vT = upperPath[u];
-		stixel.vB = lowerPath[u];
-		stixel.width = stixelWidth;
-
-		int v = (stixel.vT + stixel.vB) / 2;
-		bool inside = (u >= 0 && u < disp.cols && v >= 0 && v <= disp.rows);
-		stixel.disp = inside ? disp.at<float>(v, u) : -1;
-
-		stixels.push_back(stixel);
-	}
-#endif
-
 }
 
 StixelWrold::StixelWrold(
@@ -355,5 +362,5 @@ void StixelWrold::compute(const cv::Mat& disp, std::vector<Stixel>& stixels, int
 		baseline_, cameraHeight_, cameraTilt_);
 
 	// extract stixels
-	extractStixel(dispr, lowerPath, upperPath, stixels, stixelWidth);
+	extractStixel(disp, lowerPath, upperPath, stixels, stixelWidth);
 }
