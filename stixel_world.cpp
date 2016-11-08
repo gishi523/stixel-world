@@ -1,5 +1,9 @@
 #include "stixel_world.h"
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 static void reduceDisparity(const cv::Mat& src, cv::Mat& dst, int stixelWidth)
 {
 	dst.create(cv::Size(src.cols / stixelWidth, src.rows), CV_32F);
@@ -57,7 +61,9 @@ static void computeFreeSpace(const cv::Mat& disp, std::vector<int>& path, float 
 	for (int vb = 0; vb < vhori; vb++)
 		score.col(vb) = SCORE_INV;
 
-	for (int u = 0; u < umax; u++)
+	int u;
+#pragma omp parallel for
+	for (u = 0; u < umax; u++)
 	{
 		// compute and accumlate differences between measured disparity and road disparity
 		std::vector<float> integralRoadDiff(vmax);
@@ -101,12 +107,14 @@ static void computeFreeSpace(const cv::Mat& disp, std::vector<int>& path, float 
 	cv::Mat1s table = cv::Mat1s::zeros(score.size());
 	const float P1 = 50.f;
 	const float P2 = 32.f;
-	const int maxpixjumb = 50;
+	const int maxpixjumb = 100;
 
 	// forward path
 	for (int u = 1; u < umax; u++)
 	{
-		for (int v = vhori; v < vmax; v++)
+		int v;
+#pragma omp parallel for
+		for (v = vhori; v < vmax; v++)
 		{
 			float minscore = FLT_MAX;
 			int minv = 0;
@@ -169,7 +177,9 @@ static void heightSegmentation(const cv::Mat& disp, const std::vector<int>& lowe
 
 	cv::Mat1f score(dispt.size());
 
-	for (int u = 0; u < umax; u++)
+	int u;
+#pragma omp parallel for
+	for (u = 0; u < umax; u++)
 	{
 		// compute and accumlate membership value
 		std::vector<float> integralMembership(vmax);
@@ -189,7 +199,7 @@ static void heightSegmentation(const cv::Mat& disp, const std::vector<int>& lowe
 			const float db_deltaD = baseline * focalLengthX / (Yb * sinTilt + Zb_deltaZ * cosTilt);
 			deltaD = db_deltaD - db;
 		}
-		
+
 		for (int v = 0; v < vmax; v++)
 		{
 			const float d = dispt(u, v);
@@ -205,7 +215,7 @@ static void heightSegmentation(const cv::Mat& disp, const std::vector<int>& lowe
 			integralMembership[v] = integralMembershipOld + membership;
 			integralMembershipOld = integralMembership[v];
 		}
-		
+
 		score(u, 0) = integralMembership[vb - 1];
 		for (int vh = 1; vh < vb; vh++)
 		{
@@ -219,13 +229,15 @@ static void heightSegmentation(const cv::Mat& disp, const std::vector<int>& lowe
 	cv::Mat1s table = cv::Mat1s::zeros(score.size());
 	const float Cs = 8;
 	const float Nz = 5;
-	const int maxpixjumb = 50;
+	const int maxpixjumb = 100;
 
 	// forward upperpath
 	for (int u = 1; u < umax; u++)
 	{
 		const int vb = lowerPath[u];
-		for (int vc = 0; vc < vb; vc++)
+		int vc;
+#pragma omp parallel for
+		for (vc = 0; vc < vb; vc++)
 		{
 			const float dc = dispt(u, vc);
 			const int vpt = std::max(vc - maxpixjumb, 0);
@@ -289,7 +301,7 @@ static float extractDisparity(const cv::Mat& disp, const cv::Rect& area, float m
 	const cv::Rect imageArea(0, 0, disp.cols, disp.rows);
 	const cv::Mat roi(disp, area & imageArea);
 
-	const int histSize[] = { 1024 };
+	const int histSize[] = { maxDisp + 1 };
 	const float range[] = { -1, maxDisp };
 	const float* ranges[] = { range };
 
@@ -334,7 +346,7 @@ StixelWrold::StixelWrold(
 	float baseline,
 	float cameraHeight,
 	float cameraTilt)
-	: focalLengthX_(focalLengthX), focalLengthY_(focalLengthY), 
+	: focalLengthX_(focalLengthX), focalLengthY_(focalLengthY),
 	principalPointX_(principalPointX), principalPointY_(principalPointY),
 	baseline_(baseline), cameraHeight_(cameraHeight), cameraTilt_(cameraTilt)
 {
@@ -348,7 +360,7 @@ void StixelWrold::compute(const cv::Mat& disp, std::vector<Stixel>& stixels, int
 	// reduce disparity
 	cv::Mat dispr(cv::Size(disp.cols / stixelWidth, disp.rows), CV_32F);
 	reduceDisparity(disp, dispr, stixelWidth);
-	
+
 	// free space computation
 	computeFreeSpace(dispr, lowerPath, 2.f, 1.f, focalLengthX_, focalLengthY_, principalPointX_, principalPointY_,
 		baseline_, cameraHeight_, cameraTilt_);
