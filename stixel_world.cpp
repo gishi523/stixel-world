@@ -316,17 +316,13 @@ static void extractStixel(const cv::Mat& disp, const std::vector<int>& lowerPath
 		const int stixelHeight = vB - vT;
 		const cv::Rect stixelArea(stixelWidth * u, vT, stixelWidth, stixelHeight);
 
-		float d = extractDisparity(disp, stixelArea);
-		if (d > 0.f)
-		{
-			Stixel stixel;
-			stixel.u = stixelWidth * u + stixelWidth / 2;
-			stixel.vT = vT;
-			stixel.vB = vB;
-			stixel.width = stixelWidth;
-			stixel.disp = d;
-			stixels.push_back(stixel);
-		}
+		Stixel stixel;
+		stixel.u = stixelWidth * u + stixelWidth / 2;
+		stixel.vT = vT;
+		stixel.vB = vB;
+		stixel.width = stixelWidth;
+		stixel.disp = extractDisparity(disp, stixelArea);
+		stixels.push_back(stixel);
 	}
 }
 
