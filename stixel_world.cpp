@@ -277,7 +277,7 @@ static void heightSegmentation(const cv::Mat& disp, const std::vector<int>& lowe
 		}
 	}
 
-	// backward upperpath
+	// backward
 	upperPath.resize(umax);
 	float minscore = FLT_MAX;
 	int minv = 0;
