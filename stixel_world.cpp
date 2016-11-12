@@ -229,7 +229,7 @@ static void heightSegmentation(const cv::Mat& disp, const std::vector<int>& lowe
 	cv::Mat1s table = cv::Mat1s::zeros(score.size());
 	const float Cs = 8;
 	const float Nz = 5;
-	const int maxpixjumb = 100;
+	const int maxpixjumb = 50;
 
 	// forward upperpath
 	for (int u = 1; u < umax; u++)
@@ -296,13 +296,13 @@ static void heightSegmentation(const cv::Mat& disp, const std::vector<int>& lowe
 	}
 }
 
-static float extractDisparity(const cv::Mat& disp, const cv::Rect& area, float maxDisp = 64)
+static float extractDisparity(const cv::Mat& disp, const cv::Rect& area, int maxDisp)
 {
 	const cv::Rect imageArea(0, 0, disp.cols, disp.rows);
 	const cv::Mat roi(disp, area & imageArea);
 
 	const int histSize[] = { maxDisp + 1 };
-	const float range[] = { -1, maxDisp };
+	const float range[] = { -1, static_cast<float>(maxDisp) };
 	const float* ranges[] = { range };
 
 	cv::Mat hist;
@@ -321,6 +321,9 @@ static void extractStixel(const cv::Mat& disp, const std::vector<int>& lowerPath
 {
 	CV_Assert(stixelWidth % 2 == 1);
 
+	double maxDisp;
+	cv::minMaxLoc(disp, NULL, &maxDisp);
+
 	for (int u = 0; u < (int)upperPath.size(); u++)
 	{
 		const int vT = upperPath[u];
@@ -333,7 +336,7 @@ static void extractStixel(const cv::Mat& disp, const std::vector<int>& lowerPath
 		stixel.vT = vT;
 		stixel.vB = vB;
 		stixel.width = stixelWidth;
-		stixel.disp = extractDisparity(disp, stixelArea);
+		stixel.disp = extractDisparity(disp, stixelArea, static_cast<int>(maxDisp));
 		stixels.push_back(stixel);
 	}
 }
