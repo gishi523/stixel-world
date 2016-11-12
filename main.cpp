@@ -46,8 +46,9 @@ static cv::Scalar dispToColor(double disp, double maxdisp)
 
 static void drawStixel(cv::Mat& img, const Stixel& stixel, cv::Scalar color)
 {
-	cv::Point tl(stixel.u - radius, stixel.vT);
-	cv::Point br(stixel.u + radius, stixel.vB);
+	const int radius = std::max(stixel.width / 2, 1);
+	const cv::Point tl(stixel.u - radius, stixel.vT);
+	const cv::Point br(stixel.u + radius, stixel.vB);
 	cv::rectangle(img, cv::Rect(tl, br), color, -1);
 }
 
@@ -60,26 +61,27 @@ int main(int argc, char* argv[])
 	}
 
 	// stereo sgbm
-	int wsize = 11;
-	cv::Ptr<cv::StereoSGBM> ssgbm = cv::StereoSGBM::create(0, 64, wsize, 8 * wsize * wsize, 32 * wsize * wsize,
+	const int wsize = 11;
+	const int numDisparities = 64;
+	const int P1 = 8 * wsize * wsize;
+	const int P2 = 32 * wsize * wsize;
+	cv::Ptr<cv::StereoSGBM> ssgbm = cv::StereoSGBM::create(0, numDisparities, wsize, P1, P2,
 		0, 0, 0, 0, 0, cv::StereoSGBM::MODE_SGBM_3WAY);
 
 	// input camera parameters
-	cv::FileStorage cvfs(argv[3], CV_STORAGE_READ);
+	const cv::FileStorage cvfs(argv[3], CV_STORAGE_READ);
 	CV_Assert(cvfs.isOpened());
-	cv::FileNode node(cvfs.fs, NULL);
-	float focalLengthX = node["FocalLengthX"];
-	float focalLengthY = node["FocalLengthY"];
-	float principalPointX = node["CenterX"];
-	float principalPointY = node["CenterY"];
-	float baseline = node["BaseLine"];
-	float cameraHeight = node["Height"];
-	float cameraTilt = node["Tilt"];
+	const cv::FileNode node(cvfs.fs, NULL);
+	const float focalLengthX = node["FocalLengthX"];
+	const float focalLengthY = node["FocalLengthY"];
+	const float principalPointX = node["CenterX"];
+	const float principalPointY = node["CenterY"];
+	const float baseline = node["BaseLine"];
+	const float cameraHeight = node["Height"];
+	const float cameraTilt = node["Tilt"];
 
 	StixelWrold sw(focalLengthX, focalLengthY, principalPointX, principalPointY, 
 		baseline, cameraHeight, cameraTilt);
-
-	Timer t;
 
 	for (int frameno = 1;; frameno++)
 	{
@@ -105,10 +107,10 @@ int main(int argc, char* argv[])
 			break;
 		case CV_16U:
 			// conver to CV_8U
-			double maxval;
-			cv::minMaxLoc(left, NULL, &maxval);
-			left.convertTo(left, CV_8U, 255 / maxval);
-			right.convertTo(right, CV_8U, 255 / maxval);
+			double maxVal;
+			cv::minMaxLoc(left, NULL, &maxVal);
+			left.convertTo(left, CV_8U, 255 / maxVal);
+			right.convertTo(right, CV_8U, 255 / maxVal);
 			break;
 		default:
 			std::cerr << "unsupported image type." << std::endl;
@@ -122,30 +124,20 @@ int main(int argc, char* argv[])
 
 		// calculate stixels
 		std::vector<Stixel> stixels;
+		sw.compute(disp, stixels, 7);
 
-		t.start();
-		t.stop();
-		std::cout << "computation time: " << t.getms() << "[msec]" << std::endl;
-
-		// draw free space
+		// draw stixels
 		cv::Mat draw;
 		cv::cvtColor(left, draw, cv::COLOR_GRAY2BGRA);
 
-		cv::Mat stixelimg = cv::Mat::zeros(left.size(), draw.type());
+		cv::Mat stixelImg = cv::Mat::zeros(left.size(), draw.type());
 		for (const auto& stixel : stixels)
-			drawStixel(stixelimg, stixel, dispToColor(stixel.disp, 64));
+			drawStixel(stixelImg, stixel, dispToColor(stixel.disp, 64));
 
-		draw = draw + 0.5 * stixelimg;
-#else
-		for (int u = 0; u < left.cols; u++)
-		{
-			cv::circle(draw, cv::Point(u, sw.lowerPath[u]), 1, cv::Scalar(0, 255, 255));
-			cv::circle(draw, cv::Point(u, sw.upperPath[u]), 1, cv::Scalar(0, 0, 255));
-		}
-#endif
+		draw = draw + 0.5 * stixelImg;
 
 		cv::imshow("disparity", disp / 64);
-		cv::imshow("draw", draw);
+		cv::imshow("stixels", draw);
 		
 		char c = cv::waitKey(1);
 		if (c == 27)
