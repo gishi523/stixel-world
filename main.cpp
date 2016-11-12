@@ -139,7 +139,7 @@ int main(int argc, char* argv[])
 		cv::imshow("disparity", disp / 64);
 		cv::imshow("stixels", draw);
 		
-		char c = cv::waitKey(1);
+		const char c = cv::waitKey(1);
 		if (c == 27)
 			break;
 		if (c == 'p')
