@@ -259,7 +259,7 @@ static void heightSegmentation(const cv::Mat& disp, const std::vector<int>& lowe
 					const float coefp = (baseline / dp) * (focalLengthX / focalLengthY);
 					const float Zp = coefp * (focalLengthY * cosTilt - (vp - principalPointY) * sinTilt);
 
-					Cz = std::max(0.f, 1 - fabs(Zc - Zp) / Nz);
+					Cz = std::max(0.f, 1 - fabsf(Zc - Zp) / Nz);
 				}
 
 				float penalty = Cs * abs(vc - vp) * Cz;

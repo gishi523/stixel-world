@@ -1,7 +1,6 @@
 ﻿#include <iostream>
 #include <opencv2/opencv.hpp>
 #include "stixel_world.h"
-#include "timer.h"
 
 static cv::Scalar computeColor(float val)
 {
