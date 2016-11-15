@@ -19,7 +19,7 @@ An implementation of stixel computation
 ## ビルド
 ```
 $ git clone https://github.com/gishi523/stixel-world.git
-$ cd free-space
+$ cd stixel-world
 $ mkdir build
 $ cd build
 $ cmake ../
