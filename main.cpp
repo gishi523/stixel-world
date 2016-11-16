@@ -36,7 +36,7 @@ static cv::Scalar computeColor(float val)
 	return 255 * cv::Scalar(b, g, r);
 }
 
-static cv::Scalar dispToColor(double disp, double maxdisp)
+static cv::Scalar dispToColor(float disp, float maxdisp)
 {
 	if (disp < 0)
 		return cv::Scalar(128, 128, 128);
