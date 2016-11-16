@@ -96,7 +96,7 @@ static void computeFreeSpace(const cv::Mat& disp, std::vector<int>& path, float 
 				objectscore += dispt(u, v) > 0.f ? fabsf(dispt(u, v) - roadDisp[vb]) : SCORE_DEFAULT;
 
 			// calculate the road score
-			float roadscore = integralRoadDiff[vmax - 1] - integralRoadDiff[vb - 1];
+			const float roadscore = integralRoadDiff[vmax - 1] - integralRoadDiff[vb - 1];
 			//CV_Assert(roadscore >= 0.f);
 
 			score(u, vb) = paramO * objectscore + paramR * roadscore;
@@ -119,16 +119,16 @@ static void computeFreeSpace(const cv::Mat& disp, std::vector<int>& path, float 
 			float minscore = FLT_MAX;
 			int minv = 0;
 
-			int vvt = std::max(v - maxpixjumb, vhori);
-			int vvb = std::min(v + maxpixjumb + 1, vmax);
+			const int vvt = std::max(v - maxpixjumb, vhori);
+			const int vvb = std::min(v + maxpixjumb + 1, vmax);
 
-			float d = dispt(u, v);
+			const float d = dispt(u, v);
 			for (int vv = vvt; vv < vvb; vv++)
 			{
-				float dd = dispt(u - 1, vv);
-				float dispjump = (d >= 0.f && dd >= 0.f) ? fabsf(dd - d) : SCORE_DEFAULT;
-				float penalty = std::min(P1 * dispjump, P1 * P2);
-				float s = score(u - 1, vv) + penalty;
+				const float dd = dispt(u - 1, vv);
+				const float dispjump = (d >= 0.f && dd >= 0.f) ? fabsf(dd - d) : SCORE_DEFAULT;
+				const float penalty = std::min(P1 * dispjump, P1 * P2);
+				const float s = score(u - 1, vv) + penalty;
 				if (s < minscore)
 				{
 					minscore = s;
@@ -207,8 +207,8 @@ static void heightSegmentation(const cv::Mat& disp, const std::vector<int>& lowe
 			float membership = 0.f;
 			if (db > 0.f && d > 0.f)
 			{
-				float deltad = (d - db) / deltaD;
-				float exponent = 1.f - deltad * deltad;
+				const float deltad = (d - db) / deltaD;
+				const float exponent = 1.f - deltad * deltad;
 				membership = powf(2.f, exponent) - 1.f;
 			}
 
@@ -219,8 +219,8 @@ static void heightSegmentation(const cv::Mat& disp, const std::vector<int>& lowe
 		score(u, 0) = integralMembership[vb - 1];
 		for (int vh = 1; vh < vb; vh++)
 		{
-			float score1 = integralMembership[vh - 1];
-			float score2 = integralMembership[vb - 1] - integralMembership[vh - 1];
+			const float score1 = integralMembership[vh - 1];
+			const float score2 = integralMembership[vb - 1] - integralMembership[vh - 1];
 			score(u, vh) = score1 - score2;
 		}
 	}
@@ -262,9 +262,9 @@ static void heightSegmentation(const cv::Mat& disp, const std::vector<int>& lowe
 					Cz = std::max(0.f, 1 - fabsf(Zc - Zp) / Nz);
 				}
 
-				float penalty = Cs * abs(vc - vp) * Cz;
+				const float penalty = Cs * abs(vc - vp) * Cz;
 
-				float s = score(u - 1, vp) + penalty;
+				const float s = score(u - 1, vp) + penalty;
 				if (s < minscore)
 				{
 					minscore = s;
@@ -312,7 +312,7 @@ static float extractDisparity(const cv::Mat& disp, const cv::Rect& area, int max
 	int maxIdx;
 	cv::minMaxIdx(hist, NULL, &maxVal, NULL, &maxIdx);
 
-	double ret = (range[1] - range[0]) * maxIdx / histSize[0] + range[0];
+	const double ret = (range[1] - range[0]) * maxIdx / histSize[0] + range[0];
 	return static_cast<float>(ret);
 }
 
