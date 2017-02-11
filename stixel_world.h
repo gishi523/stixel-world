@@ -12,12 +12,12 @@ struct Stixel
 	float disp;
 };
 
-class StixelWrold
+class StixelWorld
 {
 public:
-	StixelWrold() = delete;
+	StixelWorld() = delete;
 
-	StixelWrold(
+	StixelWorld(
 		float focalLengthX,
 		float focalLengthY,
 		float principalPointX,

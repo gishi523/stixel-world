@@ -79,7 +79,7 @@ int main(int argc, char* argv[])
 	const float cameraHeight = node["Height"];
 	const float cameraTilt = node["Tilt"];
 
-	StixelWrold sw(focalLengthX, focalLengthY, principalPointX, principalPointY, 
+	StixelWorld sw(focalLengthX, focalLengthY, principalPointX, principalPointY, 
 		baseline, cameraHeight, cameraTilt);
 
 	for (int frameno = 1;; frameno++)

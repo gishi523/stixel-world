@@ -341,7 +341,7 @@ static void extractStixel(const cv::Mat& disp, const std::vector<int>& lowerPath
 	}
 }
 
-StixelWrold::StixelWrold(
+StixelWorld::StixelWorld(
 	float focalLengthX,
 	float focalLengthY,
 	float principalPointX,
@@ -356,7 +356,7 @@ StixelWrold::StixelWrold(
 
 }
 
-void StixelWrold::compute(const cv::Mat& disp, std::vector<Stixel>& stixels, int stixelWidth)
+void StixelWorld::compute(const cv::Mat& disp, std::vector<Stixel>& stixels, int stixelWidth)
 {
 	CV_Assert(disp.type() == CV_32F);
 
