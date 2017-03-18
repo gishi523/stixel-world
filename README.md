@@ -3,7 +3,7 @@ An implementation of stixel computation
 
 ====
 
-![stixel-world](wiki/images/stixels.png)
+![stixel-world](https://github.com/gishi523/stixel-world/wiki/images/stixels.png)
 
 ## Description
 - An implementation of the static Stixel computation based on [1,2].
