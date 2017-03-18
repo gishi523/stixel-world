@@ -3,7 +3,7 @@ An implementation of stixel computation
 
 ====
 
-![stixel-world](https://dl.dropboxusercontent.com/u/36775496/stixels.png)
+![stixel-world](https://github.com/gishi523/stixel-world/wiki/images/stixels.png)
 
 ## 概要
 - Daimlerの論文[1,2]を参考にStixel Computationを実装したものです
