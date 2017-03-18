@@ -1,7 +1,7 @@
 # stixel-world
 An implementation of stixel computation
 
-====
+---
 
 ![stixel-world](https://github.com/gishi523/stixel-world/wiki/images/stixels.png)
 
