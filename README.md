@@ -13,8 +13,8 @@ An implementation of stixel computation
 - [2] H. Badino, U. Franke, and D. Pfeiffer, “The stixel world - a compact medium level representation of the 3d-world,” in DAGM Symposium, (Jena, Germany), September 2009.
 
 ## Demo
-- <a href="https://www.youtube.com/watch?v=Ibc8FJ1H024" target="_blank">Demo1</a>
-- <a href="https://www.youtube.com/watch?v=ko4bfnN7RpM" target="_blank">Demo2</a>
+- <a href="https://www.youtube.com/watch?v=i8dcQYPC2kg" target="_blank">Demo1</a>
+- <a href="https://www.youtube.com/watch?v=mQTMts0-njQ" target="_blank">Demo2</a>
 
 ## Requirement
 - OpenCV
