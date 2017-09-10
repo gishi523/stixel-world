@@ -1,5 +1,5 @@
-﻿#include <iostream>
-#include <opencv2/opencv.hpp>
+﻿#include <opencv2/opencv.hpp>
+#include <chrono>
 #include "stixel_world.h"
 
 static cv::Scalar computeColor(float val)
@@ -66,50 +66,53 @@ int main(int argc, char* argv[])
 	const int P2 = 32 * wsize * wsize;
 	cv::Ptr<cv::StereoSGBM> ssgbm = cv::StereoSGBM::create(0, numDisparities, wsize, P1, P2,
 		0, 0, 0, 0, 0, cv::StereoSGBM::MODE_SGBM_3WAY);
-
+	
 	// input camera parameters
 	const cv::FileStorage cvfs(argv[3], CV_STORAGE_READ);
 	CV_Assert(cvfs.isOpened());
 	const cv::FileNode node(cvfs.fs, NULL);
-	const float focalLengthX = node["FocalLengthX"];
-	const float focalLengthY = node["FocalLengthY"];
-	const float principalPointX = node["CenterX"];
-	const float principalPointY = node["CenterY"];
-	const float baseline = node["BaseLine"];
-	const float cameraHeight = node["Height"];
-	const float cameraTilt = node["Tilt"];
+	StixelWorld::Parameters param;
+	param.camera.fu = node["FocalLengthX"];
+	param.camera.fv = node["FocalLengthY"];
+	param.camera.u0 = node["CenterX"];
+	param.camera.v0 = node["CenterY"];
+	param.camera.baseline = node["BaseLine"];
+	param.camera.height = node["Height"];
+	param.camera.tilt = node["Tilt"];
+	param.minDisparity = -1;
+	param.maxDisparity = numDisparities;
 
-	StixelWorld sw(focalLengthX, focalLengthY, principalPointX, principalPointY, 
-		baseline, cameraHeight, cameraTilt);
+	StixelWorld stixelWorld(param);
 
 	for (int frameno = 1;; frameno++)
 	{
-		char bufl[256], bufr[256];
-		sprintf(bufl, argv[1], frameno);
-		sprintf(bufr, argv[2], frameno);
+		char buf1[256];
+		char buf2[256];
+		sprintf(buf1, argv[1], frameno);
+		sprintf(buf2, argv[2], frameno);
 
-		cv::Mat left = cv::imread(bufl, -1);
-		cv::Mat right = cv::imread(bufr, -1);
+		cv::Mat I1 = cv::imread(buf1, -1);
+		cv::Mat I2 = cv::imread(buf2, -1);
 
-		if (left.empty() || right.empty())
+		if (I1.empty() || I2.empty())
 		{
 			std::cerr << "imread failed." << std::endl;
 			break;
 		}
 
-		CV_Assert(left.size() == right.size() && left.type() == right.type());
+		CV_Assert(I1.size() == I2.size() && I1.type() == I2.type());
 
-		switch (left.type())
+		switch (I1.type())
 		{
 		case CV_8U:
 			// nothing to do
 			break;
 		case CV_16U:
 			// conver to CV_8U
-			double maxVal;
-			cv::minMaxLoc(left, NULL, &maxVal);
-			left.convertTo(left, CV_8U, 255 / maxVal);
-			right.convertTo(right, CV_8U, 255 / maxVal);
+			cv::normalize(I1, I1, 0, 255, cv::NORM_MINMAX);
+			cv::normalize(I2, I2, 0, 255, cv::NORM_MINMAX);
+			I1.convertTo(I1, CV_8U);
+			I2.convertTo(I2, CV_8U);
 			break;
 		default:
 			std::cerr << "unsupported image type." << std::endl;
@@ -117,27 +120,34 @@ int main(int argc, char* argv[])
 		}
 
 		// calculate dispaliry
-		cv::Mat disp;
-		ssgbm->compute(left, right, disp);
-		disp.convertTo(disp, CV_32F, 1.0 / 16);
+		cv::Mat disparity;
+		ssgbm->compute(I1, I2, disparity);
+		disparity.convertTo(disparity, CV_32F, 1. / cv::StereoSGBM::DISP_SCALE);
 
 		// calculate stixels
 		std::vector<Stixel> stixels;
-		sw.compute(disp, stixels, 7);
+
+		const auto t1 = std::chrono::system_clock::now();
+
+		stixelWorld.compute(disparity, stixels);
+
+		const auto t2 = std::chrono::system_clock::now();
+		const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+		std::cout << "stixel computation time: " << 1e-3 * duration << "[msec]" << std::endl;
 
 		// draw stixels
 		cv::Mat draw;
-		cv::cvtColor(left, draw, cv::COLOR_GRAY2BGRA);
+		cv::cvtColor(I1, draw, cv::COLOR_GRAY2BGRA);
 
-		cv::Mat stixelImg = cv::Mat::zeros(left.size(), draw.type());
+		cv::Mat stixelImg = cv::Mat::zeros(I1.size(), draw.type());
 		for (const auto& stixel : stixels)
-			drawStixel(stixelImg, stixel, dispToColor(stixel.disp, 64));
+			drawStixel(stixelImg, stixel, dispToColor(stixel.disp, (float)numDisparities));
 
 		draw = draw + 0.5 * stixelImg;
 
-		cv::imshow("disparity", disp / 64);
+		cv::imshow("disparity", disparity / numDisparities);
 		cv::imshow("stixels", draw);
-		
+
 		const char c = cv::waitKey(1);
 		if (c == 27)
 			break;

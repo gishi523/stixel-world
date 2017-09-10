@@ -15,30 +15,65 @@ struct Stixel
 class StixelWorld
 {
 public:
-	StixelWorld() = delete;
 
-	StixelWorld(
-		float focalLengthX,
-		float focalLengthY,
-		float principalPointX,
-		float principalPointY,
-		float baseline,
-		float cameraHeight,
-		float cameraTilt);
+	struct CameraParameters
+	{
+		float fu;
+		float fv;
+		float u0;
+		float v0;
+		float baseline;
+		float height;
+		float tilt;
 
-	void compute(const cv::Mat& disp, std::vector<Stixel>& stixels, int stixelWidth = 7);
+		// default settings
+		CameraParameters()
+		{
+			fu = 1.f;
+			fv = 1.f;
+			u0 = 0.f;
+			v0 = 0.f;
+			baseline = 0.2f;
+			height = 1.f;
+			tilt = 0.f;
+		}
+	};
+
+	struct Parameters
+	{
+		// stixel width
+		int stixelWidth;
+
+		// minimum and maximum disparity
+		int minDisparity;
+		int maxDisparity;
+
+		// camera parameters
+		CameraParameters camera;
+
+		// default settings
+		Parameters()
+		{
+			// stixel width
+			stixelWidth = 7;
+
+			// maximum disparity
+			minDisparity = -1;
+			maxDisparity = 64;
+
+			// camera parameters
+			camera = CameraParameters();
+		}
+	};
+
+	StixelWorld(const Parameters& param = Parameters());
+	void compute(const cv::Mat& disp, std::vector<Stixel>& stixels);
 
 	std::vector<int> lowerPath;
 	std::vector<int> upperPath;
 
 private:
-	float focalLengthX_;
-	float focalLengthY_;
-	float principalPointX_;
-	float principalPointY_;
-	float baseline_;
-	float cameraHeight_;
-	float cameraTilt_;
+	Parameters param_;
 };
 
 #endif // !__STIXEL_WORLD_H__
