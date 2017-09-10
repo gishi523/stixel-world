@@ -51,7 +51,7 @@ public:
 	{
 		float alpha1;       //!< weight for object evidence
 		float alpha2;       //!< weight for road evidence
-		float objectHeight; //!< assumed virtual obstacle with the height
+		float objectHeight; //!< assumed object height
 		float Cs;           //!< cost parameter penalizing jumps in depth
 		float Ts;           //!< threshold saturating the cost function
 		int maxPixelJump;   //!< maximum allowed jumps in pixel (higher value increases computation time)
@@ -323,11 +323,10 @@ public:
 					}
 
 					const float penalty = param_.Cs * abs(vc - vp) * Cz;
-
-					const float _score = score(up, vp) + penalty;
-					if (_score < minScore)
+					const float s = score(up, vp) + penalty;
+					if (s < minScore)
 					{
-						minScore = _score;
+						minScore = s;
 						minv = vp;
 					}
 				}
@@ -363,7 +362,7 @@ private:
 static float averageDisparity(const cv::Mat& disparity, const cv::Rect& rect, int minDisp, int maxDisp)
 {
 	const cv::Mat dispROI = disparity(rect & cv::Rect(0, 0, disparity.cols, disparity.rows));
-	const int histSize[] = { maxDisp + 1 };
+	const int histSize[] = { maxDisp - minDisp };
 	const float range[] = { static_cast<float>(minDisp), static_cast<float>(maxDisp) };
 	const float* ranges[] = { range };
 
