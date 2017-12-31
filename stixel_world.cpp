@@ -77,10 +77,9 @@ public:
 		const int umax = disparity.rows;
 		const int vmax = disparity.cols;
 
-		cv::Mat1f score(umax, vmax);
-		cv::Mat1i table(umax, vmax);
-		table.col(0) = 0;
-
+		cv::Mat1f score(umax, vmax, std::numeric_limits<float>::max());
+		cv::Mat1i table(umax, vmax, 0);
+		
 		CoordinateTransform tf(camera);
 
 		/////////////////////////////////////////////////////////////////////////////
@@ -100,12 +99,7 @@ public:
 		/////////////////////////////////////////////////////////////////////////////
 		// compute score image for the free space
 		//////////////////////////////////////////////////////////////////////////////
-		const float SCORE_INV = -1.f;
 		const float SCORE_DEFAULT = 1.f;
-
-		// the base point above horizon is not allowed
-		for (int v = 0; v < vhor; v++)
-			score.col(v) = SCORE_INV;
 
 		int u;
 #pragma omp parallel for
@@ -237,10 +231,9 @@ public:
 		const int umax = disparity.rows;
 		const int vmax = disparity.cols;
 
-		cv::Mat1f score(umax, vmax);
-		cv::Mat1i table(umax, vmax);
-		table.col(0) = 0;
-
+		cv::Mat1f score(umax, vmax, std::numeric_limits<float>::max());
+		cv::Mat1i table(umax, vmax, 0);
+		
 		CoordinateTransform tf(camera);
 
 		/////////////////////////////////////////////////////////////////////////////
@@ -369,10 +362,10 @@ static float averageDisparity(const cv::Mat& disparity, const cv::Rect& rect, in
 	cv::Mat hist;
 	cv::calcHist(&dispROI, 1, 0, cv::Mat(), hist, 1, histSize, ranges);
 
-	int maxIdx;
-	cv::minMaxIdx(hist, NULL, NULL, NULL, &maxIdx);
+	int maxIdx[2];
+	cv::minMaxIdx(hist, NULL, NULL, NULL, maxIdx);
 
-	return (range[1] - range[0]) * maxIdx / histSize[0] + range[0];
+	return (range[1] - range[0]) * maxIdx[0] / histSize[0] + range[0];
 }
 
 StixelWorld::StixelWorld(const Parameters & param) : param_(param)
