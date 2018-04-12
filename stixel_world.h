@@ -3,34 +3,44 @@
 
 #include <opencv2/opencv.hpp>
 
+/** @brief Stixel struct
+*/
 struct Stixel
 {
-	int u;
-	int vT;
-	int vB;
-	int width;
-	float disp;
+	int u;                        //!< stixel center x position
+	int vT;                       //!< stixel top y position
+	int vB;                       //!< stixel bottom y position
+	int width;                    //!< stixel width
+	float disp;                   //!< stixel average disparity
 };
 
+/** @brief StixelWorld class.
+
+The class implements the static Stixel computation based on [1,2].
+[1] D. Pfeiffer, U. Franke: "Efficient Representation of Traffic Scenes by means of Dynamic Stixels"
+[2] H. Badino, U. Franke, and D. Pfeiffer, "The stixel world - a compact medium level representation of the 3d-world,"
+*/
 class StixelWorld
 {
 public:
 
 	enum
 	{
-		ROAD_ESTIMATION_AUTO = 0,
-		ROAD_ESTIMATION_CAMERA
+		ROAD_ESTIMATION_AUTO = 0, //!< road disparity are estimated by input disparity
+		ROAD_ESTIMATION_CAMERA    //!< road disparity are estimated by camera tilt and height
 	};
 
+	/** @brief CameraParameters struct
+	*/
 	struct CameraParameters
 	{
-		float fu;
-		float fv;
-		float u0;
-		float v0;
-		float baseline;
-		float height;
-		float tilt;
+		float fu;                 //!< focal length x (pixel)
+		float fv;                 //!< focal length y (pixel)
+		float u0;                 //!< principal point x (pixel)
+		float v0;                 //!< principal point y (pixel)
+		float baseline;           //!< baseline (meter)
+		float height;             //!< height position (meter)
+		float tilt;               //!< tilt angle (radian)
 
 		// default settings
 		CameraParameters()
@@ -45,41 +55,37 @@ public:
 		}
 	};
 
+	/** @brief Parameters struct
+	*/
 	struct Parameters
 	{
-		// stixel width
-		int stixelWidth;
-
-		// minimum and maximum disparity
-		int minDisparity;
-		int maxDisparity;
-
-		// road disparity estimation
-		int roadEstimation;
-
-		// camera parameters
-		CameraParameters camera;
+		int stixelWidth;          //!< stixel width, must be odd number
+		int minDisparity;         //!< minimum value of input disparity (half-open interval [min, max))
+		int maxDisparity;         //!< maximum value of input disparity (half-open interval [min, max))
+		int roadEstimation;       //!< road disparity estimation mode
+		CameraParameters camera;  //!< camera parameters
 
 		// default settings
 		Parameters()
 		{
-			// stixel width
 			stixelWidth = 7;
-
-			// minimum and maximum disparity
 			minDisparity = -1;
 			maxDisparity = 64;
-
-			// road disparity estimation
 			roadEstimation = ROAD_ESTIMATION_AUTO;
-
-			// camera parameters
 			camera = CameraParameters();
 		}
 	};
 
+	/** @brief The constructor
+	@param param input parameters
+	*/
 	StixelWorld(const Parameters& param = Parameters());
-	void compute(const cv::Mat& disp, std::vector<Stixel>& stixels);
+
+	/** @brief Calculates an DAISY descriptor
+	@param disparity 32-bit single-channel disparity map
+	@param output array of stixels
+	*/
+	void compute(const cv::Mat& disparity, std::vector<Stixel>& stixels);
 
 private:
 	std::vector<int> lowerPath_, upperPath_;
