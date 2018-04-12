@@ -4,11 +4,11 @@
 #include <omp.h>
 #endif
 
+using CameraParameters = StixelWorld::CameraParameters;
+
 // Transformation between pixel coordinate and world coordinate
 struct CoordinateTransform
 {
-	using CameraParameters = StixelWorld::CameraParameters;
-
 	CoordinateTransform(const CameraParameters& camera) : camera(camera)
 	{
 		sinTilt = (sinf(camera.tilt));
@@ -44,8 +44,6 @@ struct CoordinateTransform
 class RoadEstimation
 {
 public:
-
-	using CameraParameters = StixelWorld::CameraParameters;
 
 	struct Parameters
 	{
@@ -166,8 +164,6 @@ private:
 class FreeSpace
 {
 public:
-
-	using CameraParameters = StixelWorld::CameraParameters;
 
 	struct Parameters
 	{
@@ -311,8 +307,6 @@ private:
 class HeightSegmentation
 {
 public:
-
-	using CameraParameters = StixelWorld::CameraParameters;
 
 	struct Parameters
 	{
@@ -461,7 +455,29 @@ private:
 	Parameters param_;
 };
 
-static float averageDisparity(const cv::Mat& disparity, const cv::Rect& rect, int minDisp, int maxDisp)
+static cv::Vec2f calcRoadDisparityParams(const cv::Mat1f& columns, const CameraParameters& camera, int mode)
+{
+	if (mode == StixelWorld::ROAD_ESTIMATION_AUTO)
+	{
+		// estimate from v-disparity
+		RoadEstimation roadEstimation;
+		return roadEstimation.compute(columns, camera);
+	}
+	else if (mode == StixelWorld::ROAD_ESTIMATION_CAMERA)
+	{
+		// estimate from camera tilt and height
+		const float sinTilt = sinf(camera.tilt);
+		const float cosTilt = cosf(camera.tilt);
+		const float a = (camera.baseline / camera.height) * cosTilt;
+		const float b = (camera.baseline / camera.height) * (camera.fu * sinTilt - camera.v0 * cosTilt);
+		return cv::Vec2f(a, b);
+	}
+
+	CV_Error(cv::Error::StsInternal, "No such mode");
+	return cv::Vec2f(0, 0);
+}
+
+static float calcAverageDisparity(const cv::Mat& disparity, const cv::Rect& rect, int minDisp, int maxDisp)
 {
 	const cv::Mat dispROI = disparity(rect & cv::Rect(0, 0, disparity.cols, disparity.rows));
 	const int histSize[] = { maxDisp - minDisp };
@@ -509,38 +525,24 @@ void StixelWorld::compute(const cv::Mat& disparity, std::vector<Stixel>& stixels
 		}
 	}
 
+	// compute road model (assumes planar surface)
+	const cv::Vec2f line = calcRoadDisparityParams(columns, camera, param_.roadEstimation);
+	const float a = line[0];
+	const float b = line[1];
+
 	// compute expected road disparity
 	std::vector<float> roadDisp(vmax);
-	int vhor = 0;
+	for (int v = 0; v < vmax; v++)
+		roadDisp[v] = a * v + b;
+
+	// horizontal row from which road dispaliry becomes negative
+	const int vhor = cvRound(-b / a);
+
+	// when AUTO mode, update camera tilt and height
 	if (param_.roadEstimation == ROAD_ESTIMATION_AUTO)
 	{
-		// estimate from v-disparity
-		RoadEstimation roadEstimation;
-		const cv::Vec2f line = roadEstimation.compute(columns, camera);
-		const float a = line[0];
-		const float b = line[1];
-		for (int v = 0; v < vmax; v++)
-			roadDisp[v] = a * v + b;
-
-		// horizontal row from which road dispaliry becomes negative
-		vhor = cvRound(-b / a);
-
-		// update camera tilt and height
-		const float tilt = atanf((a * camera.v0 + b) / (camera.fu * a));
-		const float height = camera.baseline * cosf(tilt) / a;
-		camera.tilt = tilt;
-		camera.height = height;
-	}
-	else
-	{
-		// estimate from camera tilt and height
-		const float sinTilt = sinf(camera.tilt);
-		const float cosTilt = cosf(camera.tilt);
-		for (int v = 0; v < vmax; v++)
-			roadDisp[v] = (camera.baseline / camera.height) * (camera.fu * sinTilt + (v - camera.v0) * cosTilt);
-
-		// horizontal row from which road dispaliry becomes negative
-		vhor = cvRound((camera.v0 * cosTilt - camera.fu * sinTilt) / cosTilt);
+		camera.tilt = atanf((a * camera.v0 + b) / (camera.fu * a));
+		camera.height = camera.baseline * cosf(camera.tilt) / a;
 	}
 
 	// free space computation
@@ -564,7 +566,7 @@ void StixelWorld::compute(const cv::Mat& disparity, std::vector<Stixel>& stixels
 		stixel.vT = vT;
 		stixel.vB = vB;
 		stixel.width = stixelWidth;
-		stixel.disp = averageDisparity(disparity, stixelRegion, param_.minDisparity, param_.maxDisparity);
+		stixel.disp = calcAverageDisparity(disparity, stixelRegion, param_.minDisparity, param_.maxDisparity);
 		stixels.push_back(stixel);
 	}
 }
