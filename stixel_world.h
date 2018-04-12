@@ -39,8 +39,8 @@ public:
 		float u0;                 //!< principal point x (pixel)
 		float v0;                 //!< principal point y (pixel)
 		float baseline;           //!< baseline (meter)
-		float height;             //!< height position (meter)
-		float tilt;               //!< tilt angle (radian)
+		float height;             //!< height position (meter), ignored when ROAD_ESTIMATION_AUTO
+		float tilt;               //!< tilt angle (radian), ignored when ROAD_ESTIMATION_AUTO
 
 		// default settings
 		CameraParameters()
