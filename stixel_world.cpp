@@ -117,10 +117,10 @@ public:
 			int inliers = 0;
 			for (int i = 0; i < npoints; i++)
 			{
-				const float y = points_[i].x;
-				const float x = points_[i].y;
-				const float yhat = a * y + b;
-				if (fabs(yhat - x) <= param_.inlierRadius)
+				const float x = points_[i].x;
+				const float y = points_[i].y;
+				const float yhat = a * x + b;
+				if (fabs(yhat - y) <= param_.inlierRadius)
 					inliers++;
 			}
 
