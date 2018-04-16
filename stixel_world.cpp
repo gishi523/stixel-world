@@ -554,6 +554,7 @@ void StixelWorld::compute(const cv::Mat& disparity, std::vector<Stixel>& stixels
 	heightSegmentation.compute(columns, lowerPath_, upperPath_, camera);
 
 	// extract disparity
+	stixels.clear();
 	for (int u = 0; u < umax; u++)
 	{
 		const int vT = upperPath_[u];
