@@ -491,7 +491,7 @@ void StixelWorld::compute(const cv::Mat& disparity, std::vector<Stixel>& stixels
 		camera.tilt = atanf((line.a * camera.v0 + line.b) / (camera.fu * line.a));
 		camera.height = camera.baseline * cosf(camera.tilt) / line.a;
 	}
-	else if (param_.roadEstimation == StixelWorld::ROAD_ESTIMATION_CAMERA)
+	else if (param_.roadEstimation == ROAD_ESTIMATION_CAMERA)
 	{
 		line = calcRoadModelCamera(camera);
 	}
