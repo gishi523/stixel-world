@@ -6,6 +6,17 @@
 
 using CameraParameters = StixelWorld::CameraParameters;
 
+struct Line
+{
+	Line(float a = 0, float b = 0) : a(a), b(b) {}
+	Line(const cv::Point2f& pt1, const cv::Point2f& pt2)
+	{
+		a = (pt2.y - pt1.y) / (pt2.x - pt1.x);
+		b = -a * pt1.x + pt1.y;
+	}
+	float a, b;
+};
+
 // Transformation between pixel coordinate and world coordinate
 struct CoordinateTransform
 {
@@ -38,126 +49,6 @@ struct CoordinateTransform
 
 	CameraParameters camera;
 	float sinTilt, cosTilt, B;
-};
-
-// Implementation of road disparity estimation by RANSAC
-class RoadEstimation
-{
-public:
-
-	struct Parameters
-	{
-		int samplingStep;      //!< pixel step of disparity sampling
-		int minDisparity;      //!< minimum disparity used for RANSAC
-
-		int maxIterations;     //!< number of iterations of RANSAC
-		float inlierRadius;    //!< inlier radius of RANSAC
-		float maxCameraHeight; //!< maximum acceptable camera height
-
-		// default settings
-		Parameters()
-		{
-			samplingStep = 2;
-			minDisparity = 10;
-
-			maxIterations = 32;
-			inlierRadius = 1;
-			maxCameraHeight = 5;
-		}
-	};
-
-	RoadEstimation(const Parameters& param = Parameters()) : param_(param)
-	{
-	}
-
-	cv::Vec2f compute(const cv::Mat1f& disparity, const CameraParameters& camera)
-	{
-		CV_Assert(disparity.type() == CV_32F);
-
-		const int umax = disparity.rows;
-		const int vmax = disparity.cols;
-		const int dmin = param_.minDisparity;
-
-		// sample v-disparity points
-		points_.reserve(vmax * umax);
-		points_.clear();
-		for (int u = 0; u < umax; u += param_.samplingStep)
-		{
-			for (int v = 0; v < vmax; v += param_.samplingStep)
-			{
-				const float d = disparity.ptr<float>(u)[v];
-				if (d >= dmin)
-					points_.push_back(cv::Point2f(static_cast<float>(v), d));
-			}
-		}
-		if (points_.empty())
-			return cv::Vec2f(0, 0);
-
-		// estimate line by RANSAC
-		const int npoints = static_cast<int>(points_.size());
-		cv::RNG random;
-		cv::Vec2f bestLine(0, 0);
-		int maxInliers = 0;
-		for (int iter = 0; iter < param_.maxIterations; iter++)
-		{
-			const cv::Point2f& pt1 = points_[random.next() % npoints];
-			const cv::Point2f& pt2 = points_[random.next() % npoints];
-			const float a = (pt2.y - pt1.y) / (pt2.x - pt1.x);
-			const float b = -a * pt1.x + pt1.y;
-
-			// estimate camera tilt and height
-			const float tilt = atanf((a * camera.v0 + b) / (camera.fu * a));
-			const float height = camera.baseline * cosf(tilt) / a;
-
-			// skip if not within valid range
-			if (height <= 0.f || height > param_.maxCameraHeight)
-				continue;
-
-			// count inliers within a radius and update the best line
-			int inliers = 0;
-			for (int i = 0; i < npoints; i++)
-			{
-				const float x = points_[i].x;
-				const float y = points_[i].y;
-				const float yhat = a * x + b;
-				if (fabs(yhat - y) <= param_.inlierRadius)
-					inliers++;
-			}
-
-			if (inliers > maxInliers)
-			{
-				maxInliers = inliers;
-				bestLine = cv::Vec2f(a, b);
-			}
-		}
-
-		// apply least squares fitting using inliers around the best line
-		double sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
-		int n = 0;
-		for (int i = 0; i < npoints; i++)
-		{
-			const float x = points_[i].x;
-			const float y = points_[i].y;
-			const float yhat = bestLine[0] * x + bestLine[1];
-			if (fabs(yhat - y) <= param_.inlierRadius)
-			{
-				sx += x;
-				sy += y;
-				sxx += x * x;
-				syy += y * y;
-				sxy += x * y;
-				n++;
-			}
-		}
-
-		const float a = static_cast<float>((n * sxy - sx * sy) / (n * sxx - sx * sx));
-		const float b = static_cast<float>((sxx * sy - sxy * sx) / (n * sxx - sx * sx));
-		return cv::Vec2f(a, b);
-	}
-
-private:
-	Parameters param_;
-	std::vector<cv::Point2f> points_;
 };
 
 // Implementation of free space computation
@@ -455,26 +346,91 @@ private:
 	Parameters param_;
 };
 
-static cv::Vec2f calcRoadDisparityParams(const cv::Mat1f& columns, const CameraParameters& camera, int mode)
+// estimate road model from camera tilt and height
+static Line calcRoadModelCamera(const CameraParameters& camera)
 {
-	if (mode == StixelWorld::ROAD_ESTIMATION_AUTO)
+	const float sinTilt = sinf(camera.tilt);
+	const float cosTilt = cosf(camera.tilt);
+	const float a = (camera.baseline / camera.height) * cosTilt;
+	const float b = (camera.baseline / camera.height) * (camera.fu * sinTilt - camera.v0 * cosTilt);
+	return Line(a, b);
+}
+
+// estimate road model from v-disparity
+static Line calcRoadModelVD(const cv::Mat1f& disparity, const CameraParameters& camera,
+	int samplingStep = 2, int minDisparity = 10, int maxIterations = 32, float inlierRadius = 1, float maxCameraHeight = 5)
+{
+	const int umax = disparity.rows;
+	const int vmax = disparity.cols;
+	
+	// sample v-disparity points
+	std::vector<cv::Point2f> points;
+	points.reserve(vmax * umax);
+	for (int u = 0; u < umax; u += samplingStep)
+		for (int v = 0; v < vmax; v += samplingStep)
+			if (disparity(u, v) >= minDisparity)
+				points.push_back(cv::Point2f(static_cast<float>(v), disparity(u, v)));
+
+	if (points.empty())
+		return Line(0, 0);
+
+	// estimate line by RANSAC
+	cv::RNG random;
+	Line bestLine;
+	int maxInliers = 0;
+	for (int iter = 0; iter < maxIterations; iter++)
 	{
-		// estimate from v-disparity
-		RoadEstimation roadEstimation;
-		return roadEstimation.compute(columns, camera);
-	}
-	else if (mode == StixelWorld::ROAD_ESTIMATION_CAMERA)
-	{
-		// estimate from camera tilt and height
-		const float sinTilt = sinf(camera.tilt);
-		const float cosTilt = cosf(camera.tilt);
-		const float a = (camera.baseline / camera.height) * cosTilt;
-		const float b = (camera.baseline / camera.height) * (camera.fu * sinTilt - camera.v0 * cosTilt);
-		return cv::Vec2f(a, b);
+		// sample 2 points and get line parameters
+		const cv::Point2f& pt1 = points[random.next() % points.size()];
+		const cv::Point2f& pt2 = points[random.next() % points.size()];
+		if (pt1.x == pt2.x)
+			continue;
+
+		const Line line(pt1, pt2);
+
+		// estimate camera tilt and height
+		const float tilt = atanf((line.a * camera.v0 + line.b) / (camera.fu * line.a));
+		const float height = camera.baseline * cosf(tilt) / line.a;
+
+		// skip if not within valid range
+		if (height <= 0.f || height > maxCameraHeight)
+			continue;
+
+		// count inliers within a radius and update the best line
+		int inliers = 0;
+		for (const auto& pt : points)
+			if (fabs(line.a * pt.x + line.b - pt.y) <= inlierRadius)
+				inliers++;
+
+		if (inliers > maxInliers)
+		{
+			maxInliers = inliers;
+			bestLine = line;
+		}
 	}
 
-	CV_Error(cv::Error::StsInternal, "No such mode");
-	return cv::Vec2f(0, 0);
+	// apply least squares fitting using inliers around the best line
+	double sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
+	int n = 0;
+	for (const auto& pt : points)
+	{
+		const float x = pt.x;
+		const float y = pt.y;
+		const float yhat = bestLine.a * x + bestLine.b;
+		if (fabs(yhat - y) <= inlierRadius)
+		{
+			sx += x;
+			sy += y;
+			sxx += x * x;
+			syy += y * y;
+			sxy += x * y;
+			n++;
+		}
+	}
+
+	const float a = static_cast<float>((n * sxy - sx * sy) / (n * sxx - sx * sx));
+	const float b = static_cast<float>((sxx * sy - sxy * sx) / (n * sxx - sx * sx));
+	return Line(a, b);
 }
 
 static float calcAverageDisparity(const cv::Mat& disparity, const cv::Rect& rect, int minDisp, int maxDisp)
@@ -526,24 +482,31 @@ void StixelWorld::compute(const cv::Mat& disparity, std::vector<Stixel>& stixels
 	}
 
 	// compute road model (assumes planar surface)
-	const cv::Vec2f line = calcRoadDisparityParams(columns, camera, param_.roadEstimation);
-	const float a = line[0];
-	const float b = line[1];
+	Line line;
+	if (param_.roadEstimation == ROAD_ESTIMATION_AUTO)
+	{
+		line = calcRoadModelVD(columns, camera);
+
+		// when AUTO mode, update camera tilt and height
+		camera.tilt = atanf((line.a * camera.v0 + line.b) / (camera.fu * line.a));
+		camera.height = camera.baseline * cosf(camera.tilt) / line.a;
+	}
+	else if (param_.roadEstimation == StixelWorld::ROAD_ESTIMATION_CAMERA)
+	{
+		line = calcRoadModelCamera(camera);
+	}
+	else
+	{
+		CV_Error(cv::Error::StsInternal, "No such mode");
+	}
 
 	// compute expected road disparity
 	std::vector<float> roadDisp(vmax);
 	for (int v = 0; v < vmax; v++)
-		roadDisp[v] = a * v + b;
+		roadDisp[v] = line.a * v + line.b;
 
 	// horizontal row from which road dispaliry becomes negative
-	const int vhor = cvRound(-b / a);
-
-	// when AUTO mode, update camera tilt and height
-	if (param_.roadEstimation == ROAD_ESTIMATION_AUTO)
-	{
-		camera.tilt = atanf((a * camera.v0 + b) / (camera.fu * a));
-		camera.height = camera.baseline * cosf(camera.tilt) / a;
-	}
+	const int vhor = cvRound(-line.b / line.a);
 
 	// free space computation
 	FreeSpace freeSpace;
