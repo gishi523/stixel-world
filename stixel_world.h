@@ -81,7 +81,6 @@ public:
 	*/
 	StixelWorld(const Parameters& param = Parameters());
 
-	/** @brief Calculates an DAISY descriptor
 	@param disparity 32-bit single-channel disparity map
 	@param output array of stixels
 	*/
