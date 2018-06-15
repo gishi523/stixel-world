@@ -81,6 +81,7 @@ public:
 	*/
 	StixelWorld(const Parameters& param = Parameters());
 
+	/** @brief Computes stixels in a disparity map
 	@param disparity 32-bit single-channel disparity map
 	@param output array of stixels
 	*/
